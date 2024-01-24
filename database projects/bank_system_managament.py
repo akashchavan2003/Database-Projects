@@ -32,7 +32,7 @@ def authenticate_user(username, entered_password):
     connection = sqlite3.connect('bank_manage.db')
     cursor = connection.cursor()
 
-    cursor.execute("SELECT hashed_password FROM users WHERE username = ?", (username,))
+    cursor.execute("SELECT hashed_password,bank_name FROM users WHERE username = ?", (username,))
     result = cursor.fetchone()
 
     connection.close()
@@ -42,7 +42,7 @@ def authenticate_user(username, entered_password):
         # Check if the entered password matches the stored hash
         if bcrypt.checkpw(entered_password.encode('utf-8'), stored_hashed_password):
             print("Authentication successful!")
-            return True
+            return True, result[1]
         else:
             print("Authentication failed.")
             return False
@@ -51,11 +51,13 @@ def authenticate_user(username, entered_password):
         return False
 
 
+print(".........BANK MANAGEMENT SOFTWARE.........")
 print("PlEASE LOGIN FIRST")
 un = input("Enter User name")
 pa = input("Enter Password")
 result = authenticate_user(un, pa)
 if result:
+    print(".................Welcome", result[1], "..............")
     print("Select main menu")
     print("1.Customer Management")
     print("2.Advanced Accounts")
