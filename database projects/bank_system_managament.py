@@ -422,11 +422,20 @@ class Account:
 class Transaction:
     pass
 
+class Common_functions:
+    def __init__(self,credit,debit):
+        self.credit = credit
+        self.debit =debit
+    def self_transfer(self):
+        pass
+    def bank_transfer(self):
+        pass
 
 class Fdaccount:
     def __init__(self, an88=None):
         self.an88 = an88
-    def check_account(self,ann):
+
+    def check_account(self, ann):
         temp = False
         try:
             c2 = sqlite3.connect("bank_manage.db")
@@ -435,7 +444,6 @@ class Fdaccount:
                 q6 = "SELECT fd_ac_no FROM fd_accounts"
                 cc5.execute(q6)
                 r9 = cc5.fetchone()
-                print(r9)
                 for row in r9:
                     if row == ann:
                         temp = True
@@ -468,8 +476,6 @@ class Fdaccount:
 
         print("Enter account number to open an FD account")
         pan = int(input())
-        t = ac_availability(pan)
-        print(t)
         if ac_availability(pan):
             try:
                 cc1 = sqlite3.connect('bank_manage.db')
@@ -505,9 +511,20 @@ class Fdaccount:
         pass
 
     def add_funds(self):
-        an5=int(input("Enter FD Account number to add funds:"))
+        an5 = int(input("Enter FD Account number to add funds:"))
         if self.check_account(an5):
-            pass
+            print("1.Transfer from the Saving Account")
+            print("2.For Cash deposit")
+            print("3.Online Transfer")
+            c = input("Enter your choice")
+            if c == 1:
+
+            elif c == 2:
+                pass
+            elif c == 3:
+                pass
+            else:
+                print("Invalid Input")
         else:
             logging.info("Account does not exist. Please try again.")
 
