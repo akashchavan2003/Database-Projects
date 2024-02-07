@@ -1,12 +1,13 @@
-import datetime
 import logging
 import sqlite3
 import time
+from sqlite3 import DatabaseError
 import bcrypt
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
+from datetime import datetime, timedelta
 
 logging.basicConfig(
     level=logging.DEBUG,  # Set the minimum logging level
@@ -14,8 +15,27 @@ logging.basicConfig(
 )
 
 
+def get_current_date():
+    # this returns the date to other functions
+    current_date = datetime.now().date()
+    return current_date
+
+
+def add_days_to_date(date_string, days_to_add):
+    # Parse the date string to get year, month, and day
+    year, month, day = map(int, date_string.split('/'))
+
+    # Create a datetime object for the input date
+    input_date = datetime(year, month, day)
+
+    # Add the specified number of days to the input date
+    result_date = input_date + timedelta(days=days_to_add)
+
+    # Format the result date as a string in the format 'yy/mm/dd'
+    return result_date.strftime('%y/%m/%d')
+
+
 def ac_availability(ann):
-    global c2
     temp = False
     try:
         c2 = sqlite3.connect("bank_manage.db")
@@ -23,10 +43,9 @@ def ac_availability(ann):
             cc5 = c2.cursor()
             q6 = "SELECT account_number FROM personal_bank_account"
             cc5.execute(q6)
-            r9 = cc5.fetchone()
-            print(r9)
+            r9 = cc5.fetchall()
             for row in r9:
-                if row == ann:
+                if row[0] == ann:
                     temp = True
                     break
             return temp
@@ -152,12 +171,6 @@ def revoke_transaction():
                 connection.close()
 
 
-def get_current_date():
-    # this returns the date to other functions
-    current_date = datetime.datetime.now().date()
-    return current_date
-
-
 def get_voucher_no():
     try:
         conn = sqlite3.connect("bank_manage.db")
@@ -194,8 +207,8 @@ def create_ac():
 class Customer:
     # This class is separately for Editing the customer personal information only
     # it gives parameter by using its constructor is only a account no.
-    def __init__(self, an):
-        self.an = an
+    def __init__(self, an0):
+        self.an = an0
 
     def change_pan(self):
         pn = input("Enter pan card Number to Update")
@@ -320,7 +333,6 @@ class Account:
         finally:
             if 'con4' and 'com1' in locals():
                 con4.close()
-                com1.close()
 
     def withdraw(self):
         try:
@@ -350,9 +362,8 @@ class Account:
         except sqlite3.OperationalError as e:
             logging.info("Error while connecting to database...", e)
         finally:
-            if 'con6' and 'con7' in locals():
+            if 'con6' in locals():
                 con6.close()
-                con7.close()
 
     def change_balance(self, amt2):
         pass
@@ -399,7 +410,7 @@ class Account:
     def close_ac(self):
         an7 = int(input("Enter account number to close"))
         try:
-            cc3 = sqlite3.connect('bank_system_managament')
+            cc3 = sqlite3.connect('bank_manage.db')
             try:
                 cc0 = cc3.cursor()
                 q = "DELETE FROM personal_bank_account WHERE ac_no=?"
@@ -422,14 +433,46 @@ class Account:
 class Transaction:
     pass
 
+
 class Common_functions:
-    def __init__(self,credit,debit):
-        self.credit = credit
-        self.debit =debit
-    def self_transfer(self):
+    def __init__(self, AMT, cr_ac, debit_ac):
+        self.AMT = AMT
+        self.cr_ac = cr_ac
+        self.debit_ac = debit_ac
+
+    def transfer_funds(self):
+        try:
+            # Connect to the SQLite database
+            connection = sqlite3.connect("bank_manage.db")
+            cursor = connection.cursor()
+            # Begin transaction
+            cursor.execute("BEGIN TRANSACTION")
+            # Deduct amount from debit account
+            cursor.execute("UPDATE personal_bank_account SET balance = balance - ? WHERE account_number = ?",
+                           (self.AMT, self.debit_ac))
+            # Add amount to credit account
+            cursor.execute("UPDATE fd_accounts SET account_balance = ? WHERE fd_ac_no = ?",
+                           (self.AMT, self.cr_ac))
+            connection.commit()
+            # save to the sql table
+            save_transaction(transaction_t="TRF", dt7=get_current_date(), vn=get_voucher_no(), fan=self.debit_ac,
+                             tan=self.cr_ac)
+        except sqlite3.DatabaseError as e:
+            logging.error(f"Database error: {e}")
+            # Rollback transaction if an error occurs
+            connection.rollback()
+        except Exception as e:
+            logging.error(f"Error: {e}")
+            # Rollback transaction if an error occurs
+            connection.rollback()
+        finally:
+            # Close the database connection
+            if connection:
+                connection.close()
+
+    def self_bank_transfer(self):
         pass
-    def bank_transfer(self):
-        pass
+
 
 class Fdaccount:
     def __init__(self, an88=None):
@@ -443,9 +486,10 @@ class Fdaccount:
                 cc5 = c2.cursor()
                 q6 = "SELECT fd_ac_no FROM fd_accounts"
                 cc5.execute(q6)
-                r9 = cc5.fetchone()
+                r9 = cc5.fetchall()
+                print(r9)
                 for row in r9:
-                    if row == ann:
+                    if row[0] == ann:
                         temp = True
                         break
                 return temp
@@ -457,24 +501,34 @@ class Fdaccount:
             if c2 in locals():
                 c2.close()
 
-    def get_account_number(self, cn):
+    def get_account_number(self):
         try:
             cc30 = sqlite3.connect('bank_manage.db')
             try:
                 cc30c = cc30.cursor()
-                q01 = "SELECT fd_ac_no FROM fd_accounts WHERE customer_name=?"
-                cc30c.execute(q01, cn[1])
+                q01 = "SELECT fd_ac_no FROM fd_accounts"
+                cc30c.execute(q01)
+                r9 = cc30c.fetchall()
+                return r9[-1]
             except Exception as e:
                 logging.info("Error getting to get account number", e)
         except sqlite3.Error as e:
             logging.info("Error while connecting to database")
 
-    def create_account(self):
-        def calculate_mat_amt(fd_amt, ir1, fd_days1):
-            interest1 = (fd_amt * ir1 * fd_days1) / (365 * 100)
-            return interest1
+    def calculate_mat_amt(self, fd_amt, ir1, fd_days1):
+        interest1 = (fd_amt * ir1 * fd_days1) / (365 * 100)
+        return interest1
 
-        print("Enter account number to open an FD account")
+    def days_between_dates(self, date1_str, date2_str):
+        # Convert the date strings to datetime objects
+        date1 = datetime.strptime(date1_str, '%Y-%m-%d')
+        date2 = datetime.strptime(date2_str, '%Y-%m-%d')
+        delta = date2 - date1
+        # Return the absolute value of the number of days
+        return abs(delta.days)
+
+    def create_account(self):
+        print("Enter the saving account number to open an FD account")
         pan = int(input())
         if ac_availability(pan):
             try:
@@ -487,15 +541,20 @@ class Fdaccount:
                     fd_am = int(input("Enter Amount to make an FD: "))
                     ir = float(input("Enter interest rate to give to customer: "))
                     fd_days = int(input("Enter number of days to make an FD: "))
-                    od = get_current_date()
+                    od = str(get_current_date())
+                    cn50 = rro[1]
+
                     try:
                         qq2 = ("INSERT INTO fd_accounts (customer_name, opening_date, int_rate, fd_days, "
-                               "pre_mature_withdraw,fd_opening_amt, mat_amt) VALUES (?, ?, ?, ?, ?, ?,?)")
-                        mat_amt = calculate_mat_amt(fd_am, ir, fd_days)
-                        cursor1.execute(qq2, (rro[1], od, ir, fd_days, False, fd_am, mat_amt + fd_am))
+                               "pre_mature_withdraw,fd_opening_amt, mat_amt,personal_ac_no,fd_mat_dt) VALUES (?, ?, ?, ?, ?, ?,"
+                               "?,?,?)")
+                        mat_amt = self.calculate_mat_amt(fd_am, ir, fd_days)
+                        cursor1.execute(qq2, (
+                            rro[1], od, ir, fd_days, False, fd_am, mat_amt + fd_am, pan, add_days_to_date(od, fd_days)))
                         cc1.commit()
+                        fac = self.get_account_number()
                         logging.info("Account created successfully With account number %s",
-                                     self.get_account_number(rro))
+                                     fac[0])
                     except sqlite3.Error as e:
                         logging.error("Account creation failed: %s", e)
                 else:
@@ -510,43 +569,180 @@ class Fdaccount:
     def delete_account(self):
         pass
 
-    def add_funds(self):
-        an5 = int(input("Enter FD Account number to add funds:"))
-        if self.check_account(an5):
-            print("1.Transfer from the Saving Account")
-            print("2.For Cash deposit")
-            print("3.Online Transfer")
-            c = input("Enter your choice")
-            if c == 1:
+    def check_fd_balance(self, fd_ac_n):
+        # check FD balance and FD opening balance and returns tuple
+        try:
+            o = sqlite3.connect("bank_manage.db")
+            try:
+                c1 = o.cursor()
+                qq2 = "SELECT account_balance,fd_opening_amt FROM fd_accounts WHERE fd_ac_no=?"
+                c1.execute(qq2, (fd_ac_n,))
+                r22 = c1.fetchone()
+                return r22
+            except sqlite3.Error as r:
+                logging.info("Error while getting details", r)
+        except:
+            logging.error("Error while connecting to database")
 
-            elif c == 2:
-                pass
-            elif c == 3:
-                pass
+    def add_funds(self):
+        # get Account number
+        an5 = int(input("Enter FD Account number to add funds:"))
+        # Check account availability
+        if self.check_account(an5):
+            # CHECK FD BALANCE FOR AVOIDING REPEAT TRANSACTION
+            r3 = self.check_fd_balance(an5)
+            if r3[0] == r3[1]:
+                logging.info("FD Amount is Already Transferred....")
             else:
-                print("Invalid Input")
+                print("1.Transfer from the Saving Account")
+                print("2.For Cash deposit")
+                print("3.Online Transfer")
+                c = int(input("Enter your choice"))
+                if c == 1:
+                    try:
+                        c = sqlite3.connect("bank_manage.db")
+                        try:
+                            # Getting all details form fd_ac_table information for specific account number
+                            cu = c.cursor()
+                            query8 = "SELECT * FROM fd_accounts WHERE fd_ac_no=?"
+                            cu.execute(query8, (an5,))
+                            rows = cu.fetchone()
+                            cc1 = Customer(rows[9])
+                            result01 = cc1.get_balance()
+                            # comparison between saving account balance with fd balance to Transfer
+                            if result01 > rows[8]:
+                                ob_co = Common_functions(rows[8], rows[0], rows[9])
+                                try:
+                                    ob_co.transfer_funds()
+                                    logging.info("AMT Transfer successfully from Saving Account To FD Account....")
+                                except Exception as e:
+                                    logging.error("Transfer Failed due to", e)
+                            else:
+                                logging.info("The Personal Account Balance Is To Low For Add funds in FD Account")
+                        except sqlite3.Error as err:
+                            logging.info("Error Occurred", err)
+                            c.rollback()
+                    except Exception as e:
+                        logging.info("Error while connecting to database", e)
+                    finally:
+                        c.close()
+                elif c == 2:
+                    try:
+                        conec = sqlite3.connect("bank_manage.db")
+                        ccu = conec.cursor()
+                        qq8 = "SELECT account_balance,fd_opening_amt FROM fd_accounts WHERE fd_ac_no=?"
+                        ccu.execute(qq8, (an5,))
+                        tr = ccu.fetchone()
+                        rr = self.check_fd_balance(an5)
+                        if rr[0] == tr[0]:
+                            logging.info("AMT Is Already Transferred")
+                        else:
+                            print("Enter Deposit Amount For FD Number.", an5)
+                            cda = int(input())
+                            if tr[1] == cda:
+                                try:
+                                    qq1 = "UPDATE fd_accounts SET account_balance WHERE fd_ac_no=?"
+                                    ccu.execute(qq1, (an5,))
+                                    conec.commit()
+                                    try:
+                                        ow = Wallet(cda)
+                                        ow.cash_in_hand_deposit()
+                                    except Exception as e:
+                                        logging.error(e)
+                                        conec.rollback()
+                                except Exception as e:
+                                    conec.rollback()
+                                    logging.info("Transaction is failed")
+                                finally:
+                                    conec.close()
+                            else:
+                                print("Entered Amount is wrong to Deposit")
+                    except DatabaseError as e:
+                        logging.error("Error while connecting to database", e)
+                elif c == 3:
+                    pass
+                else:
+                    print("Invalid Input")
         else:
             logging.info("Account does not exist. Please try again.")
 
     def withdraw(self):
-        pass
+        fd_Ac_n = int(input("Enter the Fd Account Number: "))
+        if self.check_account(fd_Ac_n):
+            try:
+                ccu = sqlite3.connect("bank_manage.db")
+                ccu1 = ccu.cursor()
+                qq8 = "SELECT * FROM fd_accounts WHERE fd_ac_no=?"
+                ccu1.execute(qq8, (fd_Ac_n,))
+                fd_res1 = ccu1.fetchone()
+                dt = get_current_date()
+                if dt == fd_res1[10]:
+                    print("Maturity Date is Over you can proceed to Withdraw FD")
+                    if fd_res1[2] == fd_res1[8]:
+                        try:
+                            q11 = "UPDATE fd_accounts SET account_balance=account_balance - ? WHERE fd_ac_no=?"
+                            ccu1.execute(q11, (fd_res1[2], fd_Ac_n))
+                            ccu.commit()
+                            try:
+                                q12 = "UPDATE personal_bank_account SET balance=balance + ? WHERE account_number=?"
+                                ccu1.execute(q12, (fd_res1[7], fd_res1[9]))
+                                ccu.commit()
+                                logging.info("Successfully Amount Transferred to Saving account")
+                            except Exception as e:
+                                ccu.rollback()
+                                logging.error("Transfer Failed", e)
+                        except Exception as e:
+                            ccu.rollback()
+                            logging.error("Transfer failed to personal Account")
+                else:
+                    c = int(input("Today is not maturity date Please Confirm To Premature Withdraw Press 1"))
+                    if c == 1:
+                        try:
+                            ccu0 = sqlite3.connect("bank_manage.db")
+                            try:
+                                ccu10 = ccu0.cursor()
+                                cc20 = "SELECT * FROM fd_accounts WHERE fd_ac_no=?"
+                                ccu10.execute(cc20, (fd_Ac_n,))
+                                r45 = ccu10.fetchone()
+                                dd=str(get_current_date())
+                                dy = int(self.days_between_dates(dd,r45[3]))
+                                try:
+                                    qq11 = "UPDATE personal_bank_account SET balance=balance + ? WHERE account_number=?"
+                                    ccu1.execute(qq11, (self.calculate_mat_amt(r45[2], r45[4], dy), r45[10]))
+                                    ccu0.commit()
+                                    try:
+                                        qq12 = ("UPDATE fd_accounts SET account_balance=account_balance - ? WHERE "
+                                                "fd_ac_no=?")
+                                        ccu10.execute(qq12, (r45[2], fd_Ac_n))
+                                        ccu0.commit()
+                                        logging.info("FD withdraw successfully Amt is Transferred to Saving Account")
+                                    except Exception as e:
+                                        ccu0.rollback()
+                                except DatabaseError as e:
+                                    logging.info(e)
+                            except sqlite3.Error as e:
+                                logging.error("ERROR WHILE FETCHING DATA", e)
+                        except sqlite3.Error as e:
+                            logging.warning("Database connection failed", e)
+                        finally:
+                            ccu0.close()
+                    else:
+                        exit(0)
+            except DatabaseError as e:
+                logging.error(e)
+            finally:
+                ccu.close()
 
-    def apply_interest(self):
-        pass
+        else:
+            print("Fd account number is not found")
 
     def check_maturity(self):
-        pass
-
-    def withdraw_pre_mature(self):
         pass
 
     def check_interest(self):
         pass
 
     def extend_date(self):
-        pass
-
-    def check_fd_balance(self):
         pass
 
 
@@ -733,13 +929,24 @@ while True:
                 pass
         elif ch == 2:
             print("Select following operation")
-            print("1.Create Fixed Deposit Account")
+            print("1.Fixed Deposit Account")
             print("2.Create Recurring Deposit Account")
             print("3.Grant a Loan")
             ch = int(input("Enter your Choice"))
             if ch == 1:
+                print("Enter 1 For Create Account ")
+                print("Enter 2 For Add funds To FD Account")
+                print("Enter 3 For Withdraw Account ")
+                chh = int(input("Enter your Choice"))
                 fd_obj = Fdaccount()
-                fd_obj.create_account()
+                if chh == 1:
+                    fd_obj.create_account()
+                elif chh == 2:
+                    fd_obj.add_funds()
+                elif chh == 3:
+                    fd_obj.withdraw()
+                else:
+                    print("Invalid choice")
             elif ch == 2:
                 pass
             elif ch == 3:
@@ -761,6 +968,8 @@ while True:
             elif ch == 4:
                 revoke_transaction()
         elif ch == 4:
+            nn = int(input("Enter ac no"))
+            ac_availability(nn)
             print("Enter your choice")
             print("1.Total Accounts")
             print("2.Balance Sheet")
